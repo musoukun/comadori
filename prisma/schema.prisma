@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// カレンダーの所有者。版番号は仮押さえを1件ずつ並べるために使う
+model Owner {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  slug               String    @unique
+  googleRefreshToken String?
+  version            Int       @default(0)
+  createdAt          DateTime  @default(now())
+  blocks             Block[]
+  bookings           Booking[]
+}
+
+// 所有者が手動でふさいだ時間帯
+model Block {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  startAt   DateTime
+  endAt     DateTime
+  createdAt DateTime @default(now())
+
+  @@index([ownerId, startAt])
+}
+
+enum BookingStatus {
+  HELD
+  CONFIRMED
+}
+
+// ゲストの予約。HELD は期限付きの仮押さえ
+model Booking {
+  id            String        @id @default(cuid())
+  ownerId       String
+  owner         Owner         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  startAt       DateTime
+  endAt         DateTime
+  status        BookingStatus
+  holdExpiresAt DateTime?
+  holdTokenHash String?
+  guestName     String?
+  guestEmail    String?
+  note          String?
+  createdAt     DateTime      @default(now())
+  confirmedAt   DateTime?
+
+  @@index([ownerId, startAt])
+}

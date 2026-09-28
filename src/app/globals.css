@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #16130f;
+  --paper: #fff8e7;
+  --card: #ffffff;
+  --yellow: #ffd23f;
+  --pink: #ff7aa2;
+  --cyan: #5ad2f4;
+  --slate: #b9c4d6;
+  --muted: #6b645a;
+  --closed: #ece6d8;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-yellow: var(--yellow);
+  --color-pink: var(--pink);
+  --color-cyan: var(--cyan);
+  --color-slate: var(--slate);
+  --color-muted: var(--muted);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+body {
+  background-color: var(--paper);
+  /* 網点 */
+  background-image: radial-gradient(rgba(22, 19, 15, 0.09) 1.2px, transparent 1.2px);
+  background-size: 14px 14px;
+  color: var(--ink);
+}
+
+@layer components {
+  .panel {
+    background: var(--card);
+    border: 3px solid var(--ink);
+    border-radius: 14px;
+    box-shadow: 6px 6px 0 var(--ink);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1.1rem;
+    border: 3px solid var(--ink);
+    border-radius: 10px;
+    background: var(--card);
+    box-shadow: 4px 4px 0 var(--ink);
+    font-weight: 800;
+    line-height: 1.2;
+    cursor: pointer;
+    transition:
+      transform 80ms ease,
+      box-shadow 80ms ease;
+  }
+  .btn:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 var(--ink);
+  }
+  .btn:active:not(:disabled) {
+    transform: translate(3px, 3px);
+    box-shadow: 1px 1px 0 var(--ink);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .btn-yellow {
+    background: var(--yellow);
+  }
+  .btn-pink {
+    background: var(--pink);
+  }
+  .btn-cyan {
+    background: var(--cyan);
+  }
+  .btn-sm {
+    padding: 0.3rem 0.7rem;
+    font-size: 0.85rem;
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+
+  .input {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border: 3px solid var(--ink);
+    border-radius: 8px;
+    background: var(--card);
+    outline: none;
+  }
+  .input:focus {
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.1rem 0.55rem;
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: var(--card);
+  }
+
+  .hatch {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent 0 5px,
+      rgba(22, 19, 15, 0.14) 5px 7px
+    );
+  }
+}
