@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DurationSelect } from "@/components/DurationSelect";
-import { Legend, WeekGrid, WeekNav, type CellView } from "@/components/WeekGrid";
+import { Legend, WeekGrid, WeekNav, type CellView, type RangeSelection } from "@/components/WeekGrid";
 import { useWeek } from "@/components/useWeek";
 import { findColor } from "@/config/colors";
 import { SCHEDULING } from "@/config/scheduling";
@@ -15,7 +14,7 @@ const OWNER_POLL_SECONDS = 30;
 
 const LEGEND = [
   { label: "空き", className: "bg-card" },
-  { label: "Googleの予定", className: "bg-slate" },
+  { label: "自分のカレンダーの予定", className: "bg-slate" },
   { label: "ブロック", className: "bg-ink" },
   { label: "予約（相手の色）", className: "bg-pink" },
   { label: "仮押さえ中", className: "bg-yellow/50 hatch" },
@@ -24,9 +23,8 @@ const LEGEND = [
 
 export function OwnerBoard({ todayKey, dayEndMinutes }: { todayKey: string; dayEndMinutes: number }) {
   const [fromKey, setFromKey] = useState(todayKey);
-  const [blockMinutes, setBlockMinutes] = useState<number>(SCHEDULING.defaultBlockMinutes);
   const { data, error, reload } = useWeek<{ days: Day<OwnerCell>[] }>(
-    `/api/me/week?from=${fromKey}&minutes=${blockMinutes}`,
+    `/api/me/week?from=${fromKey}`,
     OWNER_POLL_SECONDS,
   );
   const [saving, setSaving] = useState(false);
@@ -38,11 +36,13 @@ export function OwnerBoard({ todayKey, dayEndMinutes }: { todayKey: string; dayE
     setSaving(false);
   };
 
+  const canBlock = (cell: OwnerCell) =>
+    !saving && (cell.state === "free" || cell.state === "closed") && new Date(cell.start) > new Date();
+
   const renderCell = (cell: OwnerCell): CellView => {
-    const canBlock = !saving && new Date(cell.start) > new Date();
     switch (cell.state) {
-      case "google":
-        return { className: "bg-slate", label: "Google" };
+      case "calendar":
+        return { className: "bg-slate", label: "予定" };
       case "booked":
       case "held": {
         const color = findColor(cell.colorId ?? "");
@@ -66,11 +66,20 @@ export function OwnerBoard({ todayKey, dayEndMinutes }: { todayKey: string; dayE
       case "free":
       case "closed":
         return {
-          className: `${cell.state === "closed" ? "bg-[var(--closed)] hatch" : "bg-card"} ${canBlock ? "cursor-pointer hover:bg-ink/20" : ""}`,
-          title: canBlock ? "クリックでブロックする" : undefined,
-          onClick: canBlock ? () => mutate(() => addBlockAction(cell.start, blockMinutes)) : undefined,
+          className: `${cell.state === "closed" ? "bg-[var(--closed)] hatch" : "bg-card"} ${canBlock(cell) ? "cursor-pointer hover:bg-ink/20" : ""}`,
+          title: canBlock(cell) ? "クリック、またはドラッグでブロックする" : undefined,
         };
     }
+  };
+
+  // ドラッグした範囲をまとめてブロックする。クリックだけなら defaultBlockMinutes 分
+  const selection: RangeSelection<OwnerCell> = {
+    canSelect: canBlock,
+    clickCells: SCHEDULING.defaultBlockMinutes / SCHEDULING.slotMinutes,
+    maxCells: Number.MAX_SAFE_INTEGER,
+    previewClassName: "bg-ink/60 hatch text-card",
+    onSelect: (cells) =>
+      mutate(() => addBlockAction(cells[0].start, cells.length * SCHEDULING.slotMinutes)),
   };
 
   return (
@@ -78,14 +87,15 @@ export function OwnerBoard({ todayKey, dayEndMinutes }: { todayKey: string; dayE
       <DayEndSetting initialMinutes={dayEndMinutes} onSaved={reload} />
       <WeekNav fromKey={fromKey} onChange={setFromKey} />
       <Legend items={LEGEND} />
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <DurationSelect label="ブロックの長さ" value={blockMinutes} onChange={setBlockMinutes} />
-        <p className="text-sm text-muted">
-          空いているコマをクリックするとブロック、ブロックをクリックすると解除します。予約にマウスを乗せると相手の名前が出ます。
-        </p>
-      </div>
+      <p className="text-sm text-muted">
+        空いているコマをクリック（{SCHEDULING.defaultBlockMinutes}分）またはドラッグするとブロック、ブロックをクリックすると解除します。予約にマウスを乗せると相手の名前が出ます。
+      </p>
       {error && <p className="panel bg-pink px-4 py-2 font-bold">{error}</p>}
-      {data ? <WeekGrid days={data.days} renderCell={renderCell} /> : <p className="font-bold">読み込み中…</p>}
+      {data ? (
+        <WeekGrid days={data.days} renderCell={renderCell} selection={selection} />
+      ) : (
+        <p className="font-bold">読み込み中…</p>
+      )}
     </div>
   );
 }

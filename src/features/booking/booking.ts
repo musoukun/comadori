@@ -4,7 +4,8 @@ import { dayEndOf, isInsideWindow, overlaps, rangeFrom } from "@/features/availa
 import { activeBookingWhere } from "@/features/availability/week";
 import type { Guest, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
-import { canWriteEvents, createEvent, deleteEvent, fetchBusy, updateEventSummary } from "@/lib/google";
+import { getExternalBusy } from "@/features/sync/importedBusy";
+import { canWriteEvents, createEvent, deleteEvent, updateEventSummary } from "@/lib/google";
 import { sendMail } from "@/lib/mail";
 import { formatRange } from "@/lib/time";
 
@@ -20,7 +21,7 @@ export async function holdSlot(guest: Guest, start: Date, minutes: number, now =
   const owner = await prisma.owner.findUniqueOrThrow({ where: { id: guest.ownerId } });
   if (!isInsideWindow(range, now, dayEndOf(owner))) throw new BookingError("この時間は予約できません。");
 
-  const busy = await fetchBusy(owner.googleRefreshToken, range.start, range.end);
+  const busy = await getExternalBusy(owner, range.start, range.end);
   if (busy.some((b) => overlaps(range, b))) throw new BookingError("この時間は予約できません。");
 
   const expiresAt = new Date(now.getTime() + SCHEDULING.holdMinutes * 60_000);
@@ -123,7 +124,7 @@ type BookingWithOwner = Prisma.BookingGetPayload<{ include: { owner: true } }>;
  */
 async function writeToGoogleCalendar(booking: BookingWithOwner): Promise<boolean> {
   const { owner } = booking;
-  if (!owner.googleRefreshToken || !canWriteEvents(owner.googleScopes)) return false;
+  if (!canWriteEvents(owner)) return false;
   try {
     const eventId = await createEvent(owner.googleRefreshToken, {
       summary: booking.title,
@@ -154,7 +155,9 @@ async function notifyOwner(booking: BookingWithOwner, guest: Guest, writtenToGoo
       "",
       writtenToGoogle
         ? `Googleカレンダーに「${booking.title}」として登録しました。`
-        : "Googleカレンダーには登録されていません。",
+        : booking.owner.feedToken
+          ? `購読カレンダーに「${booking.title}」として載ります。Googleカレンダーへの反映には時間がかかることがあります。`
+          : "",
     ].join("\n"),
   });
 }
@@ -176,7 +179,7 @@ export async function cancelBooking(guest: Guest, bookingId: string, now = new D
 
   const { owner } = booking;
   let removedFromGoogle = false;
-  if (booking.googleEventId && owner.googleRefreshToken) {
+  if (booking.googleEventId && canWriteEvents(owner)) {
     try {
       await deleteEvent(owner.googleRefreshToken, booking.googleEventId);
       removedFromGoogle = true;
@@ -199,7 +202,9 @@ export async function cancelBooking(guest: Guest, bookingId: string, now = new D
         ? removedFromGoogle
           ? `Googleカレンダーの「${booking.title}」を削除しました。`
           : `Googleカレンダーの「${booking.title}」を削除できませんでした。手で削除してください。`
-        : "Googleカレンダーには登録されていませんでした。",
+        : owner.feedToken
+          ? "購読カレンダーからも消えます。Googleカレンダーへの反映には時間がかかることがあります。"
+          : "",
     ].join("\n"),
   });
 }
@@ -217,7 +222,7 @@ export async function renameGuestBookings(guestId: string, title: string) {
     include: { owner: true },
   });
   for (const booking of withEvents) {
-    if (!booking.owner.googleRefreshToken) continue;
+    if (!canWriteEvents(booking.owner)) continue;
     try {
       await updateEventSummary(booking.owner.googleRefreshToken, booking.googleEventId!, title);
     } catch (e) {

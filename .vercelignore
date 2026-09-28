@@ -1,0 +1,8 @@
+# 手元の環境変数や作業用ファイルはアップロードしない（本番の値は Vercel の環境変数で持つ）
+.env
+.env.*
+!.env.example
+.agents
+.claude
+skills-lock.json
+docs

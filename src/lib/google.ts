@@ -1,4 +1,6 @@
-// Google OAuth と FreeBusy API の呼び出し。応答はアプリ内の形（Interval）に変換して返す
+// Google OAuth と Calendar API の呼び出し。応答はアプリ内の形（Interval）に変換して返す。
+// Calendar API は FEATURES.googleCalendarApi が true のときだけ使う
+import { FEATURES } from "@/config/features";
 import type { Interval } from "@/lib/time";
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -8,7 +10,8 @@ const EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/eve
 const FREEBUSY_SCOPE = "https://www.googleapis.com/auth/calendar.freebusy";
 /** 自分のカレンダーの予定を作成・変更できる。予約をGoogleカレンダーに書き込むのに使う */
 const EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events.owned";
-const SCOPES = ["openid", "email", FREEBUSY_SCOPE, EVENTS_SCOPE];
+const LOGIN_SCOPES = ["openid", "email"];
+const CALENDAR_SCOPES = [FREEBUSY_SCOPE, EVENTS_SCOPE];
 
 export function isGoogleConfigured(): boolean {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
@@ -19,14 +22,15 @@ function redirectUri(): string {
 }
 
 export function buildAuthUrl(state: string): string {
+  // カレンダー連携を止めている間は、メールアドレスの確認だけを求める（Google の審査が要らない）
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: redirectUri(),
     response_type: "code",
-    scope: SCOPES.join(" "),
-    access_type: "offline",
-    prompt: "consent",
     state,
+    ...(FEATURES.googleCalendarApi
+      ? { scope: [...LOGIN_SCOPES, ...CALENDAR_SCOPES].join(" "), access_type: "offline", prompt: "consent" }
+      : { scope: LOGIN_SCOPES.join(" "), prompt: "select_account" }),
   });
   return `${AUTH_URL}?${params}`;
 }
@@ -64,10 +68,22 @@ export async function exchangeCode(code: string) {
   return { email: payload.email, refreshToken: token.refresh_token, scopes: token.scope };
 }
 
-/** 予約をGoogleカレンダーに書き込む許可をもらっているか */
-export function canWriteEvents(scopes: string | null): boolean {
-  return Boolean(scopes?.split(" ").includes(EVENTS_SCOPE));
+type GoogleOwner = { googleRefreshToken: string | null; googleScopes: string | null };
+
+function hasScope(owner: GoogleOwner, scope: string): owner is GoogleOwner & { googleRefreshToken: string } {
+  return (
+    FEATURES.googleCalendarApi &&
+    isGoogleConfigured() &&
+    Boolean(owner.googleRefreshToken) &&
+    Boolean(owner.googleScopes?.split(" ").includes(scope))
+  );
 }
+
+/** Google カレンダーの埋まりを読める状態か */
+export const canReadBusy = (owner: GoogleOwner) => hasScope(owner, FREEBUSY_SCOPE);
+
+/** 予約を Google カレンダーに書き込める状態か */
+export const canWriteEvents = (owner: GoogleOwner) => hasScope(owner, EVENTS_SCOPE);
 
 async function accessTokenFor(refreshToken: string): Promise<string> {
   const { access_token } = await postToken({
@@ -77,14 +93,10 @@ async function accessTokenFor(refreshToken: string): Promise<string> {
   return access_token;
 }
 
-/** 指定期間の「埋まっている時間帯」だけを返す。予定の中身は受け取らない */
-export async function fetchBusy(
-  refreshToken: string | null,
-  from: Date,
-  to: Date,
-): Promise<Interval[]> {
-  if (!refreshToken || !isGoogleConfigured()) return [];
-  const access_token = await accessTokenFor(refreshToken);
+/** 指定期間の「埋まっている時間帯」だけを返す。予定の中身は受け取らない。連携していなければ空 */
+export async function fetchBusy(owner: GoogleOwner, from: Date, to: Date): Promise<Interval[]> {
+  if (!canReadBusy(owner)) return [];
+  const access_token = await accessTokenFor(owner.googleRefreshToken);
   const res = await fetch(FREEBUSY_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },

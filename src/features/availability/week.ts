@@ -1,7 +1,7 @@
 import { SCHEDULING } from "@/config/scheduling";
 import type { Owner } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
-import { fetchBusy } from "@/lib/google";
+import { getExternalBusy } from "@/features/sync/importedBusy";
 import { addDays, dateKeyToDate, type Interval } from "@/lib/time";
 import { dayEndOf, isInsideWindow, overlaps, rangeFrom } from "./rules";
 import type { Day, GuestCell, OwnerCell, OwnerCellState } from "./types";
@@ -19,7 +19,7 @@ export function activeBookingWhere(now: Date) {
 }
 
 /**
- * Googleの埋まり・ブロック・予約を重ねて、1週間分のコマを作る。
+ * 自分のカレンダーの埋まり・ブロック・予約を重ねて、1週間分のコマを作る。
  * 所有者向けの詳しい形で返し、ゲスト向けには toGuestDays で伏せる
  */
 export async function buildOwnerWeek(
@@ -34,7 +34,7 @@ export async function buildOwnerWeek(
   const dayEnd = dayEndOf(owner);
 
   const [busy, blocks, bookings] = await Promise.all([
-    fetchBusy(owner.googleRefreshToken, from, to),
+    getExternalBusy(owner, from, to),
     prisma.block.findMany({ where: { ownerId: owner.id, ...range } }),
     prisma.booking.findMany({
       where: { ownerId: owner.id, ...range, ...activeBookingWhere(now) },
@@ -56,7 +56,7 @@ export async function buildOwnerWeek(
     }
     const block = blocks.find((b) => overlaps(cell, { start: b.startAt, end: b.endAt }));
     if (block) return { state: "block", blockId: block.id };
-    if (busy.some((b) => overlaps(cell, b))) return { state: "google" };
+    if (busy.some((b) => overlaps(cell, b))) return { state: "calendar" };
     return { state: isInsideWindow(cell, now, dayEnd) ? "free" : "closed" };
   };
 
@@ -87,7 +87,7 @@ export async function buildOwnerWeek(
 const GUEST_STATE: Record<OwnerCellState, GuestCell["state"]> = {
   free: "free",
   closed: "closed",
-  google: "busy",
+  calendar: "busy",
   block: "busy",
   booked: "busy",
   held: "held",

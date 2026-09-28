@@ -24,7 +24,7 @@ export default async function GuestPage({ params }: PageProps<"/b/[slug]">) {
         </h1>
         {guest && (
           <p className="text-sm text-muted">
-            予約の長さを選んでから開始時間を選ぶと、{SCHEDULING.holdMinutes}
+            空いている時間をクリックすると{SCHEDULING.defaultMeetingMinutes}分、ドラッグすると引っ張った長さ（{SCHEDULING.slotMinutes}分単位・最大{SCHEDULING.maxMeetingMinutes}分）で、{SCHEDULING.holdMinutes}
             分間仮押さえされます。その間に確定してください。自分の予約をクリックすると取り消せます。
           </p>
         )}

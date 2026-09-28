@@ -9,12 +9,12 @@ datasource db {
 
 // カレンダーの所有者。版番号は仮押さえを1件ずつ並べるために使う
 model Owner {
-  id                 String    @id @default(cuid())
-  email              String    @unique
+  id                 String         @id @default(cuid())
+  email              String         @unique
   /**
    * 共有リンク /b/[slug] の識別子。相手はこのリンクから登録・ログインする
    */
-  slug               String    @unique
+  slug               String         @unique
   googleRefreshToken String?
   /**
    * Google で許可されたスコープ（空白区切り）
@@ -24,9 +24,24 @@ model Owner {
    * 受付の終了時刻（0時からの分）。未設定なら設定ファイルの初期値
    */
   dayEndMinutes      Int?
-  version            Int       @default(0)
-  createdAt          DateTime  @default(now())
+  /**
+   * 予定を最後に取り込んだ日時と、取り込んだ期間の終わり
+   */
+  busyImportedAt     DateTime?
+  busyImportedUntil  DateTime?
+  /**
+   * 予約の購読カレンダー（iCal）URL の鍵。作り直すと古い URL は使えなくなる
+   */
+  feedToken          String?        @unique
+  /**
+   * GAS（Google Apps Script）連携の鍵と、最後に GAS から同期された日時
+   */
+  gasToken           String?        @unique
+  gasSyncedAt        DateTime?
+  version            Int            @default(0)
+  createdAt          DateTime       @default(now())
   guests             Guest[]
+  importedBusy       ImportedBusy[]
   blocks             Block[]
   bookings           Booking[]
 }
@@ -51,6 +66,17 @@ model Guest {
 
   @@unique([ownerId, email])
   @@unique([ownerId, colorId])
+}
+
+// 所有者が .ics から取り込んだ「埋まっている時間帯」。予定の中身は持たない
+model ImportedBusy {
+  id      String   @id @default(cuid())
+  ownerId String
+  owner   Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  startAt DateTime
+  endAt   DateTime
+
+  @@index([ownerId, startAt])
 }
 
 // 所有者が手動でふさいだ時間帯

@@ -21,7 +21,7 @@ export function GuestManager({ guests }: { guests: GuestRow[] }) {
       <div className="space-y-1">
         <h2 className="font-black">登録している相手</h2>
         <p className="text-sm text-muted">
-          予約が入ると、ここで決めた予定名で自分のGoogleカレンダーに載ります。相手の名前や用件はGoogleカレンダーに書きません。「そのまま反映」にチェックを入れた相手は、予約するときに自分で予定名を付けられます（空欄ならここの予定名）。
+          予約は、ここで決めた予定名で自分のカレンダーに載ります（カレンダー連携の設定が必要です）。相手の名前や用件はカレンダーに載せません。「そのまま反映」にチェックを入れた相手は、予約するときに自分で予定名を付けられます（空欄ならここの予定名）。
         </p>
       </div>
       {guests.length === 0 ? (

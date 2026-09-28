@@ -1,7 +1,8 @@
 // 画面とサーバーの両方で使う型。サーバー専用の import を入れない
 
 /** 所有者の画面で見える、コマの状態 */
-export type OwnerCellState = "free" | "closed" | "google" | "block" | "booked" | "held";
+/** calendar は、自分のカレンダー（取り込み・Google 連携）で埋まっている時間 */
+export type OwnerCellState = "free" | "closed" | "calendar" | "block" | "booked" | "held";
 
 /**
  * 相手の画面で見える、コマの状態。他の人の予定は理由を伏せる。

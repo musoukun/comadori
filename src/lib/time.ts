@@ -63,8 +63,13 @@ export function formatTime(date: Date): string {
   return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
 }
 
+/** "2026/10/8(木)" */
+export function formatDate(date: Date): string {
+  const p = toLocalParts(date);
+  return `${p.y}/${p.m}/${p.d}(${WEEKDAY_JA[p.weekday]})`;
+}
+
 /** "2026/10/8(木) 11:30〜12:30" */
 export function formatRange(start: Date, end: Date): string {
-  const p = toLocalParts(start);
-  return `${p.y}/${p.m}/${p.d}(${WEEKDAY_JA[p.weekday]}) ${formatTime(start)}〜${formatTime(end)}`;
+  return `${formatDate(start)} ${formatTime(start)}〜${formatTime(end)}`;
 }

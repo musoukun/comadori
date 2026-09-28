@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ColorPicker } from "@/components/ColorPicker";
-import { DurationSelect } from "@/components/DurationSelect";
-import { Legend, WeekGrid, WeekNav, type CellView } from "@/components/WeekGrid";
+import { Legend, WeekGrid, WeekNav, type CellView, type RangeSelection } from "@/components/WeekGrid";
 import { useWeek } from "@/components/useWeek";
 import { findColor } from "@/config/colors";
 import { GUESTS } from "@/config/guests";
@@ -35,9 +34,8 @@ export function GuestBoard({
   takenColors: string[];
 }) {
   const [fromKey, setFromKey] = useState(todayKey);
-  const [minutes, setMinutes] = useState<number>(SCHEDULING.defaultMeetingMinutes);
   const { data, error, reload } = useWeek<WeekResponse>(
-    `/api/public/${slug}/week?from=${fromKey}&minutes=${minutes}`,
+    `/api/public/${slug}/week?from=${fromKey}`,
     SCHEDULING.pollSeconds,
   );
   const [message, setMessage] = useState<string | null>(null);
@@ -46,10 +44,11 @@ export function GuestBoard({
   const color = findColor(me.colorId);
   const hold = data?.myHold ?? null;
 
-  const selectSlot = async (cell: GuestCell) => {
+  /** ドラッグ（またはクリック）で選んだコマの範囲を仮押さえする */
+  const holdRange = async (cells: GuestCell[]) => {
     setBusy(true);
     setMessage(null);
-    const result = await holdSlotAction(slug, cell.start, minutes);
+    const result = await holdSlotAction(slug, cells[0].start, cells.length * SCHEDULING.slotMinutes);
     if (!result.ok) setMessage(result.message);
     await reload();
     setBusy(false);
@@ -109,20 +108,23 @@ export function GuestBoard({
       case "closed":
         return { className: "bg-[var(--closed)] hatch" };
       case "free":
-        return cell.bookable && !busy
-          ? {
-              className: "bg-card hover:bg-yellow cursor-pointer",
-              onClick: () => selectSlot(cell),
-              title: "この時間から予約する",
-            }
-          : { className: "bg-card" };
+        return busy
+          ? { className: "bg-card" }
+          : { className: "bg-card hover:bg-yellow cursor-pointer", title: "クリック、またはドラッグで時間を選ぶ" };
     }
+  };
+
+  const selection: RangeSelection<GuestCell> = {
+    canSelect: (cell) => cell.state === "free" && !busy,
+    clickCells: SCHEDULING.defaultMeetingMinutes / SCHEDULING.slotMinutes,
+    maxCells: SCHEDULING.maxMeetingMinutes / SCHEDULING.slotMinutes,
+    previewClassName: "bg-pink hatch",
+    onSelect: holdRange,
   };
 
   return (
     <div className="space-y-4 pb-72">
       <MeBar slug={slug} me={me} takenColors={takenColors} />
-      <DurationSelect label="予約の長さ" value={minutes} onChange={setMinutes} />
       <WeekNav
         fromKey={fromKey}
         minKey={todayKey}
@@ -140,7 +142,11 @@ export function GuestBoard({
       />
       {message && <p className="panel bg-yellow px-4 py-2 font-bold">{message}</p>}
       {error && <p className="panel bg-pink px-4 py-2 font-bold">{error}</p>}
-      {data ? <WeekGrid days={data.days} renderCell={renderCell} /> : <p className="font-bold">読み込み中…</p>}
+      {data ? (
+        <WeekGrid days={data.days} renderCell={renderCell} selection={selection} />
+      ) : (
+        <p className="font-bold">読み込み中…</p>
+      )}
       {hold && (
         <HoldPanel
           key={hold.id}
