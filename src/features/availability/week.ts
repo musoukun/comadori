@@ -3,7 +3,7 @@ import type { Owner } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { fetchBusy } from "@/lib/google";
 import { addDays, dateKeyToDate, type Interval } from "@/lib/time";
-import { isInsideWindow, meetingRange, overlaps } from "./rules";
+import { isInsideWindow, overlaps, rangeFrom } from "./rules";
 import type { Day, GuestCell, OwnerCell, OwnerCellState } from "./types";
 
 export const DAYS_PER_VIEW = 7;
@@ -25,6 +25,7 @@ export function activeBookingWhere(now: Date) {
 export async function buildOwnerWeek(
   owner: Owner,
   fromKey: string,
+  meetingMinutes: number,
   now = new Date(),
 ): Promise<Day<OwnerCell>[]> {
   const from = dateKeyToDate(fromKey);
@@ -34,22 +35,30 @@ export async function buildOwnerWeek(
   const [busy, blocks, bookings] = await Promise.all([
     fetchBusy(owner.googleRefreshToken, from, to),
     prisma.block.findMany({ where: { ownerId: owner.id, ...range } }),
-    prisma.booking.findMany({ where: { ownerId: owner.id, ...range, ...activeBookingWhere(now) } }),
+    prisma.booking.findMany({
+      where: { ownerId: owner.id, ...range, ...activeBookingWhere(now) },
+      include: { guest: { select: { colorId: true } } },
+    }),
   ]);
 
   const stateOf = (cell: Interval): Omit<OwnerCell, "start" | "end" | "bookable"> => {
     const booking = bookings.find((b) => overlaps(cell, { start: b.startAt, end: b.endAt }));
-    if (booking?.status === "CONFIRMED") {
-      return { state: "booked", guestName: booking.guestName ?? undefined };
+    if (booking) {
+      return {
+        state: booking.status === "CONFIRMED" ? "booked" : "held",
+        title: booking.title,
+        guestId: booking.guestId ?? undefined,
+        guestName: booking.guestName,
+        colorId: booking.guest?.colorId,
+      };
     }
-    if (booking) return { state: "held" };
     const block = blocks.find((b) => overlaps(cell, { start: b.startAt, end: b.endAt }));
     if (block) return { state: "block", blockId: block.id };
     if (busy.some((b) => overlaps(cell, b))) return { state: "google" };
     return { state: isInsideWindow(cell, now) ? "free" : "closed" };
   };
 
-  const cellsPerMeeting = SCHEDULING.meetingMinutes / SCHEDULING.slotMinutes;
+  const cellsPerMeeting = meetingMinutes / SCHEDULING.slotMinutes;
 
   return Array.from({ length: DAYS_PER_VIEW }, (_, i) => {
     const date = addDays(fromKey, i);
@@ -66,7 +75,7 @@ export async function buildOwnerWeek(
       const bookable =
         following.length === cellsPerMeeting &&
         following.every((s) => s.state === "free") &&
-        isInsideWindow(meetingRange(cell.start), now);
+        isInsideWindow(rangeFrom(cell.start, meetingMinutes), now);
       return { start: cell.start.toISOString(), end: cell.end.toISOString(), ...states[j], bookable };
     });
     return { date, cells };
@@ -82,14 +91,20 @@ const GUEST_STATE: Record<OwnerCellState, GuestCell["state"]> = {
   held: "held",
 };
 
-/** ゲストには予定の理由や名前を見せない */
-export function toGuestDays(days: Day<OwnerCell>[]): Day<GuestCell>[] {
+function guestStateOf(cell: OwnerCell, guestId: string): GuestCell["state"] {
+  if (cell.guestId === guestId && cell.state === "booked") return "mine";
+  if (cell.guestId === guestId && cell.state === "held") return "myHold";
+  return GUEST_STATE[cell.state];
+}
+
+/** 相手には、自分の予約以外は予定の理由や名前を見せない */
+export function toGuestDays(days: Day<OwnerCell>[], guestId: string): Day<GuestCell>[] {
   return days.map((day) => ({
     date: day.date,
     cells: day.cells.map((c) => ({
       start: c.start,
       end: c.end,
-      state: GUEST_STATE[c.state],
+      state: guestStateOf(c, guestId),
       bookable: c.bookable,
     })),
   }));

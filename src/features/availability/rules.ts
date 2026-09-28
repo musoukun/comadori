@@ -21,7 +21,7 @@ export function isInsideWindow(range: Interval, now: Date): boolean {
   );
 }
 
-/** 予約の開始時刻から、予約の時間帯を作る */
-export function meetingRange(start: Date): Interval {
-  return { start, end: new Date(start.getTime() + SCHEDULING.meetingMinutes * 60_000) };
+/** 開始時刻と長さ（分）から時間帯を作る */
+export function rangeFrom(start: Date, minutes: number): Interval {
+  return { start, end: new Date(start.getTime() + minutes * 60_000) };
 }

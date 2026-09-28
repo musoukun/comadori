@@ -4,7 +4,11 @@ import type { Interval } from "@/lib/time";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const FREEBUSY_URL = "https://www.googleapis.com/calendar/v3/freeBusy";
-const SCOPES = ["openid", "email", "https://www.googleapis.com/auth/calendar.freebusy"];
+const EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const FREEBUSY_SCOPE = "https://www.googleapis.com/auth/calendar.freebusy";
+/** 自分のカレンダーの予定を作成・変更できる。予約をGoogleカレンダーに書き込むのに使う */
+const EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events.owned";
+const SCOPES = ["openid", "email", FREEBUSY_SCOPE, EVENTS_SCOPE];
 
 export function isGoogleConfigured(): boolean {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
@@ -38,7 +42,12 @@ async function postToken(body: Record<string, string>) {
     }),
   });
   if (!res.ok) throw new Error(`Google token error: ${res.status} ${await res.text()}`);
-  return res.json() as Promise<{ access_token: string; refresh_token?: string; id_token?: string }>;
+  return res.json() as Promise<{
+    access_token: string;
+    refresh_token?: string;
+    id_token?: string;
+    scope?: string;
+  }>;
 }
 
 /** 認可コードをトークンに換え、ログインした人のメールアドレスも取り出す */
@@ -52,7 +61,20 @@ export async function exchangeCode(code: string) {
   const payload = JSON.parse(
     Buffer.from(token.id_token!.split(".")[1], "base64url").toString("utf8"),
   ) as { email: string; email_verified?: boolean };
-  return { email: payload.email, refreshToken: token.refresh_token };
+  return { email: payload.email, refreshToken: token.refresh_token, scopes: token.scope };
+}
+
+/** 予約をGoogleカレンダーに書き込む許可をもらっているか */
+export function canWriteEvents(scopes: string | null): boolean {
+  return Boolean(scopes?.split(" ").includes(EVENTS_SCOPE));
+}
+
+async function accessTokenFor(refreshToken: string): Promise<string> {
+  const { access_token } = await postToken({
+    refresh_token: refreshToken,
+    grant_type: "refresh_token",
+  });
+  return access_token;
 }
 
 /** 指定期間の「埋まっている時間帯」だけを返す。予定の中身は受け取らない */
@@ -62,10 +84,7 @@ export async function fetchBusy(
   to: Date,
 ): Promise<Interval[]> {
   if (!refreshToken || !isGoogleConfigured()) return [];
-  const { access_token } = await postToken({
-    refresh_token: refreshToken,
-    grant_type: "refresh_token",
-  });
+  const access_token = await accessTokenFor(refreshToken);
   const res = await fetch(FREEBUSY_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
@@ -83,4 +102,28 @@ export async function fetchBusy(
     start: new Date(b.start),
     end: new Date(b.end),
   }));
+}
+
+export type NewEvent = {
+  summary: string;
+  description: string;
+  start: Date;
+  end: Date;
+};
+
+/** 所有者のメインカレンダーに予定を作り、予定のIDを返す */
+export async function createEvent(refreshToken: string, event: NewEvent): Promise<string> {
+  const access_token = await accessTokenFor(refreshToken);
+  const res = await fetch(EVENTS_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      summary: event.summary,
+      description: event.description,
+      start: { dateTime: event.start.toISOString() },
+      end: { dateTime: event.end.toISOString() },
+    }),
+  });
+  if (!res.ok) throw new Error(`Google events.insert error: ${res.status} ${await res.text()}`);
+  return ((await res.json()) as { id: string }).id;
 }

@@ -16,11 +16,11 @@ export async function GET(request: NextRequest) {
     return new Response("ログインに失敗しました。もう一度お試しください。", { status: 400 });
   }
 
-  const { email, refreshToken } = await exchangeCode(code);
+  const { email, refreshToken, scopes } = await exchangeCode(code);
   if (!isAllowedOwner(email)) {
     return new Response("このGoogleアカウントではログインできません。", { status: 403 });
   }
-  const owner = await upsertOwner(email, refreshToken);
+  const owner = await upsertOwner(email, { refreshToken, scopes });
   await setOwnerSession(owner.id);
   redirect("/me");
 }

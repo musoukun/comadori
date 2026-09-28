@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { DurationSelect } from "@/components/DurationSelect";
 import { Legend, WeekGrid, WeekNav, type CellView } from "@/components/WeekGrid";
 import { useWeek } from "@/components/useWeek";
-import type { OwnerCell } from "@/features/availability/types";
+import { findColor } from "@/config/colors";
+import { SCHEDULING } from "@/config/scheduling";
+import type { Day, OwnerCell } from "@/features/availability/types";
 import { addBlockAction, removeBlockAction } from "./actions";
 
 // 所有者の画面は、新しい予約が見えれば十分なので取り直しの間隔を長めにする
@@ -13,14 +16,18 @@ const LEGEND = [
   { label: "空き", className: "bg-card" },
   { label: "Googleの予定", className: "bg-slate" },
   { label: "ブロック", className: "bg-ink" },
-  { label: "予約", className: "bg-pink" },
+  { label: "予約（相手の色）", className: "bg-pink" },
   { label: "仮押さえ中", className: "bg-yellow/50 hatch" },
   { label: "受付時間外", className: "bg-[var(--closed)] hatch" },
 ];
 
 export function OwnerBoard({ todayKey }: { todayKey: string }) {
   const [fromKey, setFromKey] = useState(todayKey);
-  const { days, error, reload } = useWeek<OwnerCell>(`/api/me/week?from=${fromKey}`, OWNER_POLL_SECONDS);
+  const [blockMinutes, setBlockMinutes] = useState<number>(SCHEDULING.defaultBlockMinutes);
+  const { data, error, reload } = useWeek<{ days: Day<OwnerCell>[] }>(
+    `/api/me/week?from=${fromKey}&minutes=${blockMinutes}`,
+    OWNER_POLL_SECONDS,
+  );
   const [saving, setSaving] = useState(false);
 
   const mutate = async (fn: () => Promise<void>) => {
@@ -36,9 +43,18 @@ export function OwnerBoard({ todayKey }: { todayKey: string }) {
       case "google":
         return { className: "bg-slate", label: "Google" };
       case "booked":
-        return { className: "bg-pink", label: cell.guestName ?? "予約" };
-      case "held":
-        return { className: "bg-yellow/50 hatch", label: "仮押さえ中" };
+      case "held": {
+        const color = findColor(cell.colorId ?? "");
+        return {
+          className: cell.state === "held" ? "hatch" : "",
+          style: {
+            backgroundColor: cell.state === "held" ? `${color.hex}66` : color.hex,
+            color: cell.state === "held" ? "var(--ink)" : color.text,
+          },
+          label: cell.state === "held" ? `仮押さえ中（${cell.title}）` : cell.title,
+          title: cell.guestName,
+        };
+      }
       case "block":
         return {
           className: "bg-ink text-card cursor-pointer hover:opacity-80",
@@ -51,7 +67,7 @@ export function OwnerBoard({ todayKey }: { todayKey: string }) {
         return {
           className: `${cell.state === "closed" ? "bg-[var(--closed)] hatch" : "bg-card"} ${canBlock ? "cursor-pointer hover:bg-ink/20" : ""}`,
           title: canBlock ? "クリックでブロックする" : undefined,
-          onClick: canBlock ? () => mutate(() => addBlockAction(cell.start)) : undefined,
+          onClick: canBlock ? () => mutate(() => addBlockAction(cell.start, blockMinutes)) : undefined,
         };
     }
   };
@@ -60,11 +76,14 @@ export function OwnerBoard({ todayKey }: { todayKey: string }) {
     <div className="space-y-4">
       <WeekNav fromKey={fromKey} onChange={setFromKey} />
       <Legend items={LEGEND} />
-      <p className="text-sm text-muted">
-        空いているコマをクリックするとブロック、ブロックをクリックすると解除します。
-      </p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <DurationSelect label="ブロックの長さ" value={blockMinutes} onChange={setBlockMinutes} />
+        <p className="text-sm text-muted">
+          空いているコマをクリックするとブロック、ブロックをクリックすると解除します。予約にマウスを乗せると相手の名前が出ます。
+        </p>
+      </div>
       {error && <p className="panel bg-pink px-4 py-2 font-bold">{error}</p>}
-      {days ? <WeekGrid days={days} renderCell={renderCell} /> : <p className="font-bold">読み込み中…</p>}
+      {data ? <WeekGrid days={data.days} renderCell={renderCell} /> : <p className="font-bold">読み込み中…</p>}
     </div>
   );
 }

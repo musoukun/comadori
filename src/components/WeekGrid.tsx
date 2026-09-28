@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import type { Day } from "@/features/availability/types";
 import { addDays, formatDayLabel, formatTime, parseDateKey } from "@/lib/time";
 
@@ -9,6 +10,7 @@ export type CellView = {
   label?: string;
   onClick?: () => void;
   title?: string;
+  style?: CSSProperties;
 };
 
 type Props<C extends { start: string }> = {
@@ -51,7 +53,11 @@ function Row<C extends { start: string }>({
   renderCell,
 }: { time: string; row: number } & Props<C>) {
   const onHour = time.endsWith(":00");
-  const lineClass = onHour ? "border-t-2 border-ink/40" : "border-t border-dashed border-ink/20";
+  const lineClass = onHour
+    ? "border-t-2 border-ink/40"
+    : time.endsWith(":30")
+      ? "border-t border-dashed border-ink/25"
+      : "border-t border-dotted border-ink/15";
 
   return (
     <>
@@ -69,10 +75,11 @@ function Row<C extends { start: string }>({
             disabled={!view.onClick}
             onClick={view.onClick}
             title={view.title}
-            className={`relative h-8 border-l-2 border-ink text-left disabled:cursor-default ${lineClass} ${view.className}`}
+            style={view.style}
+            className={`relative h-6 border-l-2 border-ink text-left disabled:cursor-default ${lineClass} ${view.className}`}
           >
             {showLabel && (
-              <span className="absolute top-0.5 left-1 right-1 truncate text-[11px] font-bold">
+              <span className="absolute top-0.5 left-1 right-1 truncate text-[11px] leading-tight font-bold">
                 {view.label}
               </span>
             )}
@@ -130,12 +137,19 @@ export function WeekNav({
   );
 }
 
-export function Legend({ items }: { items: { label: string; className: string }[] }) {
+export function Legend({
+  items,
+}: {
+  items: { label: string; className: string; style?: CSSProperties }[];
+}) {
   return (
     <div className="flex flex-wrap gap-2">
       {items.map((item) => (
         <span key={item.label} className="tag">
-          <span className={`inline-block h-3 w-3 rounded-sm border-2 border-ink ${item.className}`} />
+          <span
+            className={`inline-block h-3 w-3 rounded-sm border-2 border-ink ${item.className}`}
+            style={item.style}
+          />
           {item.label}
         </span>
       ))}

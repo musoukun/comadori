@@ -1,22 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Day } from "@/features/availability/types";
 
-/** 1週間分のコマを読み込み、一定間隔とタブに戻ったときに取り直す */
-export function useWeek<C>(url: string, pollSeconds: number) {
-  const [days, setDays] = useState<Day<C>[] | null>(null);
+/** 週表示のデータを読み込み、一定間隔とタブに戻ったときに取り直す */
+export function useWeek<T>(url: string, pollSeconds: number) {
+  const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
       const res = await fetch(url, { cache: "no-store" });
-      const data = await res.json();
+      const body = await res.json();
       if (!res.ok) {
-        setError(data.message ?? "読み込みに失敗しました。");
+        setError(body.message ?? "読み込みに失敗しました。");
         return;
       }
-      setDays(data.days);
+      setData(body);
       setError(null);
     } catch {
       setError("読み込みに失敗しました。");
@@ -36,5 +35,5 @@ export function useWeek<C>(url: string, pollSeconds: number) {
     };
   }, [reload, pollSeconds]);
 
-  return { days, error, reload };
+  return { data, error, reload };
 }
