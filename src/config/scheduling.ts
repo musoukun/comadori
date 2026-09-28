@@ -9,9 +9,11 @@ export const SCHEDULING = {
   defaultBlockMinutes: 15,
   /** 仮押さえの有効時間（分） */
   holdMinutes: 5,
-  /** 受付開始・終了の時刻（日本時間） */
+  /** 受付開始の時刻（日本時間） */
   dayStartHour: 9,
-  dayEndHour: 19,
+  /** 受付終了の時刻（0時からの分）。所有者が設定しなければこの値。設定できる最も遅い時刻 */
+  defaultDayEndMinutes: 19 * 60,
+  latestDayEndMinutes: 23 * 60 + 45,
   /** 受け付ける曜日（0=日曜 … 6=土曜） */
   workdays: [1, 2, 3, 4, 5],
   /** 何日先まで予約を受け付けるか */

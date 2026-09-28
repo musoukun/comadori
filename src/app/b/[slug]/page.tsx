@@ -25,7 +25,7 @@ export default async function GuestPage({ params }: PageProps<"/b/[slug]">) {
         {guest && (
           <p className="text-sm text-muted">
             予約の長さを選んでから開始時間を選ぶと、{SCHEDULING.holdMinutes}
-            分間仮押さえされます。その間に確定してください。
+            分間仮押さえされます。その間に確定してください。自分の予約をクリックすると取り消せます。
           </p>
         )}
       </header>
@@ -33,7 +33,7 @@ export default async function GuestPage({ params }: PageProps<"/b/[slug]">) {
         <GuestBoard
           slug={slug}
           todayKey={localDateKey(new Date())}
-          me={{ name: guest.name, colorId: guest.colorId }}
+          me={{ name: guest.name, colorId: guest.colorId, canNameEvent: guest.useGuestTitle }}
           takenColors={takenColors}
         />
       ) : (

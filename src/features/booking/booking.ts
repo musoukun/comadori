@@ -1,9 +1,10 @@
+import { GUESTS } from "@/config/guests";
 import { isValidMeetingMinutes, SCHEDULING } from "@/config/scheduling";
-import { isInsideWindow, overlaps, rangeFrom } from "@/features/availability/rules";
+import { dayEndOf, isInsideWindow, overlaps, rangeFrom } from "@/features/availability/rules";
 import { activeBookingWhere } from "@/features/availability/week";
 import type { Guest, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
-import { canWriteEvents, createEvent, fetchBusy } from "@/lib/google";
+import { canWriteEvents, createEvent, deleteEvent, fetchBusy, updateEventSummary } from "@/lib/google";
 import { sendMail } from "@/lib/mail";
 import { formatRange } from "@/lib/time";
 
@@ -16,9 +17,9 @@ export class BookingError extends Error {}
 export async function holdSlot(guest: Guest, start: Date, minutes: number, now = new Date()) {
   if (!isValidMeetingMinutes(minutes)) throw new BookingError("予約の長さが正しくありません。");
   const range = rangeFrom(start, minutes);
-  if (!isInsideWindow(range, now)) throw new BookingError("この時間は予約できません。");
-
   const owner = await prisma.owner.findUniqueOrThrow({ where: { id: guest.ownerId } });
+  if (!isInsideWindow(range, now, dayEndOf(owner))) throw new BookingError("この時間は予約できません。");
+
   const busy = await fetchBusy(owner.googleRefreshToken, range.start, range.end);
   if (busy.some((b) => overlaps(range, b))) throw new BookingError("この時間は予約できません。");
 
@@ -76,11 +77,30 @@ export async function findActiveHold(guestId: string, now = new Date()): Promise
   return booking ? toHold(booking) : null;
 }
 
+export type ConfirmInput = { note: string; title: string };
+
+/** 相手が決めた予定名。相手に許可されていない、または空欄なら null（所有者の予定名のまま） */
+function guestTitleOf(guest: Guest, title: string): string | null {
+  const text = title.trim();
+  if (!guest.useGuestTitle || !text) return null;
+  if (text.length > GUESTS.maxTextLength) {
+    throw new BookingError(`予定名は${GUESTS.maxTextLength}文字以内で入力してください。`);
+  }
+  return text;
+}
+
 /** 仮押さえを押さえた本人だけが、期限内に確定できる */
-export async function confirmHold(guest: Guest, bookingId: string, note: string, now = new Date()) {
+export async function confirmHold(guest: Guest, bookingId: string, input: ConfirmInput, now = new Date()) {
+  const guestTitle = guestTitleOf(guest, input.title);
   const updated = await prisma.booking.updateMany({
     where: { id: bookingId, guestId: guest.id, status: "HELD", holdExpiresAt: { gt: now } },
-    data: { status: "CONFIRMED", note: note.trim() || null, confirmedAt: now, holdExpiresAt: null },
+    data: {
+      status: "CONFIRMED",
+      note: input.note.trim() || null,
+      confirmedAt: now,
+      holdExpiresAt: null,
+      ...(guestTitle ? { title: guestTitle, titleFromGuest: true } : {}),
+    },
   });
   if (updated.count === 0) {
     throw new BookingError("仮押さえの期限が切れました。もう一度時間を選んでください。");
@@ -142,4 +162,66 @@ async function notifyOwner(booking: BookingWithOwner, guest: Guest, writtenToGoo
 /** 仮押さえをやめて、コマを空きに戻す */
 export async function releaseHold(guest: Guest, bookingId: string) {
   await prisma.booking.deleteMany({ where: { id: bookingId, guestId: guest.id, status: "HELD" } });
+}
+
+/** 相手が自分の確定済みの予約を取り消す。始まる前の予約だけ。Googleカレンダーの予定も消す */
+export async function cancelBooking(guest: Guest, bookingId: string, now = new Date()) {
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, guestId: guest.id, status: "CONFIRMED", startAt: { gt: now } },
+    include: { owner: true },
+  });
+  if (!booking) throw new BookingError("この予約は取り消せません。");
+
+  await prisma.booking.delete({ where: { id: booking.id } });
+
+  const { owner } = booking;
+  let removedFromGoogle = false;
+  if (booking.googleEventId && owner.googleRefreshToken) {
+    try {
+      await deleteEvent(owner.googleRefreshToken, booking.googleEventId);
+      removedFromGoogle = true;
+    } catch (e) {
+      console.error("[google] failed to delete event", e);
+    }
+  }
+
+  const when = formatRange(booking.startAt, booking.endAt);
+  await sendMail({
+    to: owner.email,
+    subject: `【コマドリ】予約が取り消されました ${when}`,
+    text: [
+      "コマドリの予約が取り消されました。",
+      "",
+      `日時: ${when}`,
+      `お名前: ${guest.name}`,
+      "",
+      booking.googleEventId
+        ? removedFromGoogle
+          ? `Googleカレンダーの「${booking.title}」を削除しました。`
+          : `Googleカレンダーの「${booking.title}」を削除できませんでした。手で削除してください。`
+        : "Googleカレンダーには登録されていませんでした。",
+    ].join("\n"),
+  });
+}
+
+/**
+ * 所有者が相手の予定名を変えたら、その相手の予約とGoogleカレンダーの予定名も書き換える。
+ * 相手が自分で決めた予定名の予約は書き換えない
+ */
+export async function renameGuestBookings(guestId: string, title: string) {
+  const target = { guestId, titleFromGuest: false };
+  await prisma.booking.updateMany({ where: target, data: { title } });
+
+  const withEvents = await prisma.booking.findMany({
+    where: { ...target, googleEventId: { not: null } },
+    include: { owner: true },
+  });
+  for (const booking of withEvents) {
+    if (!booking.owner.googleRefreshToken) continue;
+    try {
+      await updateEventSummary(booking.owner.googleRefreshToken, booking.googleEventId!, title);
+    } catch (e) {
+      console.error("[google] failed to rename event", e);
+    }
+  }
 }

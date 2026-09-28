@@ -127,3 +127,30 @@ export async function createEvent(refreshToken: string, event: NewEvent): Promis
   if (!res.ok) throw new Error(`Google events.insert error: ${res.status} ${await res.text()}`);
   return ((await res.json()) as { id: string }).id;
 }
+
+function eventUrl(eventId: string): string {
+  return `${EVENTS_URL}/${encodeURIComponent(eventId)}`;
+}
+
+/** 予定名だけを書き換える */
+export async function updateEventSummary(refreshToken: string, eventId: string, summary: string) {
+  const access_token = await accessTokenFor(refreshToken);
+  const res = await fetch(eventUrl(eventId), {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ summary }),
+  });
+  if (!res.ok) throw new Error(`Google events.patch error: ${res.status} ${await res.text()}`);
+}
+
+/** 予定を消す。すでに消えている（404/410）ときは成功とみなす */
+export async function deleteEvent(refreshToken: string, eventId: string) {
+  const access_token = await accessTokenFor(refreshToken);
+  const res = await fetch(eventUrl(eventId), {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${access_token}` },
+  });
+  if (!res.ok && res.status !== 404 && res.status !== 410) {
+    throw new Error(`Google events.delete error: ${res.status} ${await res.text()}`);
+  }
+}

@@ -11,12 +11,18 @@ datasource db {
 model Owner {
   id                 String    @id @default(cuid())
   email              String    @unique
-  /** 共有リンク /b/[slug] の識別子。相手はこのリンクから登録・ログインする */
+  /**
+   * 共有リンク /b/[slug] の識別子。相手はこのリンクから登録・ログインする
+   */
   slug               String    @unique
   googleRefreshToken String?
-  /** Google で許可されたスコープ（空白区切り） */
+  /**
+   * Google で許可されたスコープ（空白区切り）
+   */
   googleScopes       String?
-  /** 受付の終了時刻（0時からの分）。未設定なら設定ファイルの初期値 */
+  /**
+   * 受付の終了時刻（0時からの分）。未設定なら設定ファイルの初期値
+   */
   dayEndMinutes      Int?
   version            Int       @default(0)
   createdAt          DateTime  @default(now())
@@ -27,16 +33,21 @@ model Owner {
 
 // 予定を入れる側の相手。色は本人が空いている色から選ぶ。カレンダーに出す予定名は所有者が決める
 model Guest {
-  id           String    @id @default(cuid())
-  ownerId      String
-  owner        Owner     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  email        String
-  passwordHash String
-  name         String
-  colorId      String
-  maskTitle    String
-  createdAt    DateTime  @default(now())
-  bookings     Booking[]
+  id            String               @id @default(cuid())
+  ownerId       String
+  owner         Owner                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  email         String
+  passwordHash  String
+  name          String
+  colorId       String
+  maskTitle     String
+  /**
+   * true なら、予約するときに相手が予定名を決められる。空欄なら maskTitle を使う
+   */
+  useGuestTitle Boolean              @default(false)
+  createdAt     DateTime             @default(now())
+  bookings      Booking[]
+  resetTokens   PasswordResetToken[]
 
   @@unique([ownerId, email])
   @@unique([ownerId, colorId])
@@ -61,21 +72,46 @@ enum BookingStatus {
 
 // 相手の予約。HELD は期限付きの仮押さえ。予定名と名前は仮押さえの時点で相手の設定から写す
 model Booking {
-  id            String        @id @default(cuid())
-  ownerId       String
-  owner         Owner         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  guestId       String?
-  guest         Guest?        @relation(fields: [guestId], references: [id], onDelete: SetNull)
-  startAt       DateTime
-  endAt         DateTime
-  status        BookingStatus
-  title         String
-  guestName     String
-  holdExpiresAt DateTime?
-  note          String?
-  googleEventId String?
-  createdAt     DateTime      @default(now())
-  confirmedAt   DateTime?
+  id             String        @id @default(cuid())
+  ownerId        String
+  owner          Owner         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  guestId        String?
+  guest          Guest?        @relation(fields: [guestId], references: [id], onDelete: SetNull)
+  startAt        DateTime
+  endAt          DateTime
+  status         BookingStatus
+  title          String
+  /**
+   * 予定名を相手が決めたか。所有者が予定名を変えても、相手が決めた名前は書き換えない
+   */
+  titleFromGuest Boolean       @default(false)
+  guestName      String
+  holdExpiresAt  DateTime?
+  note           String?
+  googleEventId  String?
+  createdAt      DateTime      @default(now())
+  confirmedAt    DateTime?
 
   @@index([ownerId, startAt])
+}
+
+// 相手のログイン失敗の回数。キーは「所有者ID:メールアドレス」。一定回数失敗したらしばらくログインさせない
+model LoginThrottle {
+  key         String    @id
+  failures    Int       @default(0)
+  lockedUntil DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+// パスワード再設定のリンク。トークンはハッシュだけを保存し、期限つきで1回だけ使える
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  guestId   String
+  guest     Guest     @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([guestId])
 }

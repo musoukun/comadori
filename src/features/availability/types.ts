@@ -17,6 +17,7 @@ export type OwnerCell = {
   bookable: boolean;
   blockId?: string;
   /** 予約（仮押さえ含む）のとき、カレンダーに出す予定名・相手・相手の色 */
+  bookingId?: string;
   title?: string;
   guestId?: string;
   guestName?: string;
@@ -28,6 +29,8 @@ export type GuestCell = {
   end: string;
   state: GuestCellState;
   bookable: boolean;
+  /** 自分の確定済みの予約（mine）のときだけ。取り消しに使う */
+  bookingId?: string;
 };
 
 export type Day<C> = { date: string; cells: C[] };

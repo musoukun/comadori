@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { dayEndOf } from "@/features/availability/rules";
 import { listGuests } from "@/features/guests/guests";
 import { canWriteEvents, isGoogleConfigured } from "@/lib/google";
 import { getCurrentOwner } from "@/lib/session";
@@ -20,7 +21,7 @@ export default async function OwnerPage() {
       : null;
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+    <main className="mx-auto max-w-[70.4rem] space-y-6 px-4 py-8">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-3xl">コマドリ</h1>
         <div className="flex items-center gap-3">
@@ -54,7 +55,7 @@ export default async function OwnerPage() {
 
       <GuestManager guests={guests} />
 
-      <OwnerBoard todayKey={localDateKey(new Date())} />
+      <OwnerBoard todayKey={localDateKey(new Date())} dayEndMinutes={dayEndOf(owner)} />
     </main>
   );
 }

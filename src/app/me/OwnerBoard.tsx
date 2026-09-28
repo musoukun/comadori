@@ -8,6 +8,7 @@ import { findColor } from "@/config/colors";
 import { SCHEDULING } from "@/config/scheduling";
 import type { Day, OwnerCell } from "@/features/availability/types";
 import { addBlockAction, removeBlockAction } from "./actions";
+import { DayEndSetting } from "./DayEndSetting";
 
 // 所有者の画面は、新しい予約が見えれば十分なので取り直しの間隔を長めにする
 const OWNER_POLL_SECONDS = 30;
@@ -21,7 +22,7 @@ const LEGEND = [
   { label: "受付時間外", className: "bg-[var(--closed)] hatch" },
 ];
 
-export function OwnerBoard({ todayKey }: { todayKey: string }) {
+export function OwnerBoard({ todayKey, dayEndMinutes }: { todayKey: string; dayEndMinutes: number }) {
   const [fromKey, setFromKey] = useState(todayKey);
   const [blockMinutes, setBlockMinutes] = useState<number>(SCHEDULING.defaultBlockMinutes);
   const { data, error, reload } = useWeek<{ days: Day<OwnerCell>[] }>(
@@ -74,6 +75,7 @@ export function OwnerBoard({ todayKey }: { todayKey: string }) {
 
   return (
     <div className="space-y-4">
+      <DayEndSetting initialMinutes={dayEndMinutes} onSaved={reload} />
       <WeekNav fromKey={fromKey} onChange={setFromKey} />
       <Legend items={LEGEND} />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">

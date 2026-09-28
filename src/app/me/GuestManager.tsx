@@ -3,9 +3,16 @@
 import { useState } from "react";
 import { findColor } from "@/config/colors";
 import { GUESTS } from "@/config/guests";
-import { deleteGuestAction, updateMaskTitleAction } from "./actions";
+import { deleteGuestAction, setUseGuestTitleAction, updateMaskTitleAction } from "./actions";
 
-type GuestRow = { id: string; name: string; email: string; colorId: string; maskTitle: string };
+type GuestRow = {
+  id: string;
+  name: string;
+  email: string;
+  colorId: string;
+  maskTitle: string;
+  useGuestTitle: boolean;
+};
 
 /** 登録した相手の一覧。相手ごとにカレンダーに出す予定名を決める */
 export function GuestManager({ guests }: { guests: GuestRow[] }) {
@@ -14,7 +21,7 @@ export function GuestManager({ guests }: { guests: GuestRow[] }) {
       <div className="space-y-1">
         <h2 className="font-black">登録している相手</h2>
         <p className="text-sm text-muted">
-          予約が入ると、ここで決めた予定名で自分のGoogleカレンダーに載ります。相手の名前や用件はGoogleカレンダーに書きません。
+          予約が入ると、ここで決めた予定名で自分のGoogleカレンダーに載ります。相手の名前や用件はGoogleカレンダーに書きません。「そのまま反映」にチェックを入れた相手は、予約するときに自分で予定名を付けられます（空欄ならここの予定名）。
         </p>
       </div>
       {guests.length === 0 ? (
@@ -35,6 +42,12 @@ function GuestItem({ guest }: { guest: GuestRow }) {
   const [title, setTitle] = useState(guest.maskTitle);
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [useGuestTitle, setUseGuestTitle] = useState(guest.useGuestTitle);
+
+  const toggleGuestTitle = async (value: boolean) => {
+    setUseGuestTitle(value);
+    await setUseGuestTitleAction(guest.id, value);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -80,6 +93,15 @@ function GuestItem({ guest }: { guest: GuestRow }) {
       >
         保存
       </button>
+      <label className="flex cursor-pointer items-center gap-2 text-sm font-bold">
+        <input
+          type="checkbox"
+          checked={useGuestTitle}
+          onChange={(e) => toggleGuestTitle(e.target.checked)}
+          className="h-5 w-5 cursor-pointer accent-[var(--ink)]"
+        />
+        そのまま反映
+      </label>
       <button type="button" className="btn btn-sm" onClick={remove}>
         削除
       </button>

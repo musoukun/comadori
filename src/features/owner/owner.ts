@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { isValidDayEnd } from "@/features/availability/rules";
 import { prisma } from "@/lib/db";
 
 /** ログインを許可するメールアドレスか。OWNER_EMAIL が空なら誰でも可 */
@@ -17,4 +18,10 @@ export async function upsertOwner(email: string, google?: { refreshToken?: strin
     create: { email, slug: randomBytes(6).toString("base64url"), ...googleData },
     update: googleData,
   });
+}
+
+/** 受付の終了時刻（0時からの分）を設定する */
+export async function updateDayEnd(ownerId: string, minutes: number) {
+  if (!isValidDayEnd(minutes)) throw new Error("Invalid day end");
+  await prisma.owner.update({ where: { id: ownerId }, data: { dayEndMinutes: minutes } });
 }

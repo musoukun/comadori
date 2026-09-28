@@ -3,7 +3,7 @@ import type { Owner } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { fetchBusy } from "@/lib/google";
 import { addDays, dateKeyToDate, type Interval } from "@/lib/time";
-import { isInsideWindow, overlaps, rangeFrom } from "./rules";
+import { dayEndOf, isInsideWindow, overlaps, rangeFrom } from "./rules";
 import type { Day, GuestCell, OwnerCell, OwnerCellState } from "./types";
 
 export const DAYS_PER_VIEW = 7;
@@ -31,6 +31,7 @@ export async function buildOwnerWeek(
   const from = dateKeyToDate(fromKey);
   const to = dateKeyToDate(addDays(fromKey, DAYS_PER_VIEW));
   const range = { startAt: { lt: to }, endAt: { gt: from } };
+  const dayEnd = dayEndOf(owner);
 
   const [busy, blocks, bookings] = await Promise.all([
     fetchBusy(owner.googleRefreshToken, from, to),
@@ -46,6 +47,7 @@ export async function buildOwnerWeek(
     if (booking) {
       return {
         state: booking.status === "CONFIRMED" ? "booked" : "held",
+        bookingId: booking.id,
         title: booking.title,
         guestId: booking.guestId ?? undefined,
         guestName: booking.guestName,
@@ -55,7 +57,7 @@ export async function buildOwnerWeek(
     const block = blocks.find((b) => overlaps(cell, { start: b.startAt, end: b.endAt }));
     if (block) return { state: "block", blockId: block.id };
     if (busy.some((b) => overlaps(cell, b))) return { state: "google" };
-    return { state: isInsideWindow(cell, now) ? "free" : "closed" };
+    return { state: isInsideWindow(cell, now, dayEnd) ? "free" : "closed" };
   };
 
   const cellsPerMeeting = meetingMinutes / SCHEDULING.slotMinutes;
@@ -63,7 +65,7 @@ export async function buildOwnerWeek(
   return Array.from({ length: DAYS_PER_VIEW }, (_, i) => {
     const date = addDays(fromKey, i);
     const intervals: Interval[] = [];
-    for (let m = SCHEDULING.dayStartHour * 60; m < SCHEDULING.dayEndHour * 60; m += SCHEDULING.slotMinutes) {
+    for (let m = SCHEDULING.dayStartHour * 60; m < dayEnd; m += SCHEDULING.slotMinutes) {
       intervals.push({
         start: dateKeyToDate(date, m),
         end: dateKeyToDate(date, m + SCHEDULING.slotMinutes),
@@ -75,7 +77,7 @@ export async function buildOwnerWeek(
       const bookable =
         following.length === cellsPerMeeting &&
         following.every((s) => s.state === "free") &&
-        isInsideWindow(rangeFrom(cell.start, meetingMinutes), now);
+        isInsideWindow(rangeFrom(cell.start, meetingMinutes), now, dayEnd);
       return { start: cell.start.toISOString(), end: cell.end.toISOString(), ...states[j], bookable };
     });
     return { date, cells };
@@ -101,11 +103,15 @@ function guestStateOf(cell: OwnerCell, guestId: string): GuestCell["state"] {
 export function toGuestDays(days: Day<OwnerCell>[], guestId: string): Day<GuestCell>[] {
   return days.map((day) => ({
     date: day.date,
-    cells: day.cells.map((c) => ({
-      start: c.start,
-      end: c.end,
-      state: guestStateOf(c, guestId),
-      bookable: c.bookable,
-    })),
+    cells: day.cells.map((c) => {
+      const state = guestStateOf(c, guestId);
+      return {
+        start: c.start,
+        end: c.end,
+        state,
+        bookable: c.bookable,
+        bookingId: state === "mine" ? c.bookingId : undefined,
+      };
+    }),
   }));
 }

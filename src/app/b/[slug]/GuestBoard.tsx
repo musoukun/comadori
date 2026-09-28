@@ -6,14 +6,22 @@ import { DurationSelect } from "@/components/DurationSelect";
 import { Legend, WeekGrid, WeekNav, type CellView } from "@/components/WeekGrid";
 import { useWeek } from "@/components/useWeek";
 import { findColor } from "@/config/colors";
+import { GUESTS } from "@/config/guests";
 import { SCHEDULING } from "@/config/scheduling";
 import type { Day, GuestCell } from "@/features/availability/types";
 import type { Hold } from "@/features/booking/booking";
-import { addDays, formatRange } from "@/lib/time";
-import { changeColorAction, confirmHoldAction, guestLogoutAction, holdSlotAction, releaseHoldAction } from "./actions";
+import { addDays, formatRange, formatTime } from "@/lib/time";
+import {
+  cancelBookingAction,
+  changeColorAction,
+  confirmHoldAction,
+  guestLogoutAction,
+  holdSlotAction,
+  releaseHoldAction,
+} from "./actions";
 
 type WeekResponse = { days: Day<GuestCell>[]; myHold: Hold | null };
-type Me = { name: string; colorId: string };
+type Me = { name: string; colorId: string; canNameEvent: boolean };
 
 export function GuestBoard({
   slug,
@@ -52,6 +60,16 @@ export function GuestBoard({
     reload();
   };
 
+  const cancelBooking = async (cell: GuestCell) => {
+    if (!confirm(`${formatTime(new Date(cell.start))} からの予約を取り消しますか？`)) return;
+    setBusy(true);
+    setMessage(null);
+    const result = await cancelBookingAction(slug, cell.bookingId!);
+    setMessage(result.ok ? "予約を取り消しました。" : result.message);
+    await reload();
+    setBusy(false);
+  };
+
   const onExpired = () => {
     setMessage("仮押さえの期限が切れました。もう一度時間を選んでください。");
     reload();
@@ -72,8 +90,16 @@ export function GuestBoard({
   const mineStyle = { backgroundColor: color.hex, color: color.text };
   const renderCell = (cell: GuestCell): CellView => {
     switch (cell.state) {
-      case "mine":
-        return { className: "", style: mineStyle, label: "自分の予約" };
+      case "mine": {
+        const cancellable = !busy && cell.bookingId !== undefined && new Date(cell.start) > new Date();
+        return {
+          className: cancellable ? "cursor-pointer hover:opacity-80" : "",
+          style: mineStyle,
+          label: "自分の予約",
+          title: cancellable ? "クリックで取り消す" : undefined,
+          onClick: cancellable ? () => cancelBooking(cell) : undefined,
+        };
+      }
       case "myHold":
         return { className: "hatch", style: mineStyle, label: "選択中" };
       case "busy":
@@ -120,6 +146,7 @@ export function GuestBoard({
           key={hold.id}
           slug={slug}
           hold={hold}
+          canNameEvent={me.canNameEvent}
           onCancel={cancelHold}
           onExpired={onExpired}
           onConfirmed={(r) => {
@@ -171,6 +198,7 @@ function MeBar({ slug, me, takenColors }: { slug: string; me: Me; takenColors: s
 function HoldPanel({
   slug,
   hold,
+  canNameEvent,
   onCancel,
   onExpired,
   onConfirmed,
@@ -178,6 +206,7 @@ function HoldPanel({
 }: {
   slug: string;
   hold: Hold;
+  canNameEvent: boolean;
   onCancel: () => void;
   onExpired: () => void;
   onConfirmed: (r: { start: string; end: string }) => void;
@@ -188,7 +217,10 @@ function HoldPanel({
 
   const submit = async (form: FormData) => {
     setSending(true);
-    const result = await confirmHoldAction(slug, hold.id, String(form.get("note") ?? ""));
+    const result = await confirmHoldAction(slug, hold.id, {
+      note: String(form.get("note") ?? ""),
+      title: String(form.get("title") ?? ""),
+    });
     setSending(false);
     if (result.ok) onConfirmed(result);
     else onError(result.message);
@@ -204,6 +236,14 @@ function HoldPanel({
             仮押さえ中 残り {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}
           </span>
         </div>
+        {canNameEvent && (
+          <input
+            name="title"
+            maxLength={GUESTS.maxTextLength}
+            placeholder="予定名（任意。相手のカレンダーにこの名前で入ります）"
+            className="input"
+          />
+        )}
         <textarea name="note" rows={2} placeholder="用件（任意）" className="input" />
         <div className="flex justify-end gap-3">
           <button type="button" className="btn" onClick={onCancel} disabled={sending}>
