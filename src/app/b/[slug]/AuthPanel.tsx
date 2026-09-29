@@ -8,9 +8,10 @@ import { loginAction, registerAction, requestPasswordResetAction } from "./actio
 type Mode = "login" | "register" | "forgot";
 
 /** 相手のログインと、はじめての人の登録 */
-export function AuthPanel({ slug, takenColors }: { slug: string; takenColors: string[] }) {
+export function AuthPanel({ slug, initialColor }: { slug: string; initialColor: string }) {
   const [mode, setMode] = useState<Mode>("login");
-  const [colorId, setColorId] = useState<string | null>(null);
+  // 最初から色を1つ選んでおく（あとで変えられる）。初期値はサーバーで決めて渡す
+  const [colorId, setColorId] = useState<string>(initialColor);
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -36,16 +37,12 @@ export function AuthPanel({ slug, takenColors }: { slug: string; takenColors: st
   const submit = async (form: FormData) => {
     const email = String(form.get("email") ?? "");
     const password = String(form.get("password") ?? "");
-    if (mode === "register" && !colorId) {
-      setMessage("色を選んでください。");
-      return;
-    }
     setSending(true);
     setMessage(null);
     const result =
       mode === "login"
         ? await loginAction(slug, email, password)
-        : await registerAction(slug, { name: String(form.get("name") ?? ""), email, password, colorId: colorId! });
+        : await registerAction(slug, { name: String(form.get("name") ?? ""), email, password, colorId });
     setSending(false);
     if (!result.ok) setMessage(result.message);
   };
@@ -117,8 +114,8 @@ export function AuthPanel({ slug, takenColors }: { slug: string; takenColors: st
         </label>
         {mode === "register" && (
           <div className="space-y-2">
-            <span className="text-sm font-bold">あなたの色（予定を入れたときの色。×は他の方が使用中）</span>
-            <ColorPicker value={colorId} taken={takenColors} onChange={setColorId} />
+            <span className="text-sm font-bold">あなたの色（予定を入れたときの色。あとで変えられます）</span>
+            <ColorPicker value={colorId} onChange={setColorId} />
           </div>
         )}
         {message && <p className="font-bold text-[#c0392b]">{message}</p>}

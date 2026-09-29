@@ -46,7 +46,7 @@ model Owner {
   bookings           Booking[]
 }
 
-// 予定を入れる側の相手。色は本人が空いている色から選ぶ。カレンダーに出す予定名は所有者が決める
+// 予定を入れる側の相手。色は本人が自由に選ぶ（他の人と同じでもよい）。カレンダーに出す予定名は所有者が決める
 model Guest {
   id            String               @id @default(cuid())
   ownerId       String
@@ -65,7 +65,6 @@ model Guest {
   resetTokens   PasswordResetToken[]
 
   @@unique([ownerId, email])
-  @@unique([ownerId, colorId])
 }
 
 // 所有者のカレンダーから取り込んだ「埋まっている時間帯」と予定名

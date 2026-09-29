@@ -1,44 +1,39 @@
 "use client";
 
-import { GUEST_COLORS } from "@/config/colors";
+import { findColor, GUEST_COLORS } from "@/config/colors";
 
-/** 色を1つ選ぶ。他の人が使っている色は選べない */
-export function ColorPicker({
-  value,
-  taken,
-  onChange,
-}: {
-  value: string | null;
-  taken: string[];
-  onChange: (colorId: string) => void;
-}) {
+/** よく使う色をワンクリックで選ぶか、カラーピッカーで好きな色を選ぶ。他の人と同じ色でもよい */
+export function ColorPicker({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
+  const current = findColor(value).hex.toLowerCase();
+
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {GUEST_COLORS.map((c) => {
-        const isTaken = taken.includes(c.id);
-        const selected = value === c.id;
+        const selected = current === c.hex.toLowerCase();
         return (
           <button
             key={c.id}
             type="button"
-            title={isTaken ? `${c.name}（使用中）` : c.name}
+            title={c.name}
             aria-label={c.name}
             aria-pressed={selected}
-            disabled={isTaken}
-            onClick={() => onChange(c.id)}
-            className={`relative h-9 w-9 rounded-full border-[3px] border-ink transition-transform disabled:cursor-not-allowed ${
-              selected ? "scale-110 shadow-[3px_3px_0_var(--ink)]" : isTaken ? "opacity-25" : "hover:-translate-y-0.5"
+            onClick={() => onChange(c.hex)}
+            className={`h-8 w-8 rounded-full border-[3px] border-ink transition-transform ${
+              selected ? "scale-110 shadow-[3px_3px_0_var(--ink)]" : "hover:-translate-y-0.5"
             }`}
             style={{ backgroundColor: c.hex }}
-          >
-            {isTaken && (
-              <span className="absolute inset-0 flex items-center justify-center text-lg font-black text-ink">
-                ×
-              </span>
-            )}
-          </button>
+          />
         );
       })}
+      <label className="btn btn-sm cursor-pointer gap-2" title="好きな色を選ぶ">
+        <input
+          type="color"
+          value={current}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-6 w-8 cursor-pointer rounded border-2 border-ink bg-transparent p-0"
+        />
+        好きな色
+      </label>
     </div>
   );
 }

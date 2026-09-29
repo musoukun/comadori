@@ -1,11 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
+import { COOKIE_NAMES, sessionCookieOptions } from "@/lib/sessionCookie";
 
-// ログイン状態を、署名付きの cookie で持つ。所有者と相手（ゲスト）で cookie を分ける
-const COOKIE_NAMES = { owner: "comadori_owner", guest: "comadori_guest" } as const;
+// ログイン状態を、署名付きの cookie で持つ。所有者と相手（ゲスト）で cookie を分ける。
+// 期限はページを開くたびに src/proxy.ts で延ばす
 type Kind = keyof typeof COOKIE_NAMES;
-const MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 /**
  * 署名には「印」も混ぜる。相手の印はパスワードのハッシュから作るので、
@@ -18,13 +18,7 @@ function sign(kind: Kind, id: string, stamp: string): string {
 const guestStamp = (passwordHash: string) => passwordHash.slice(-16);
 
 async function setSession(kind: Kind, id: string, stamp: string) {
-  (await cookies()).set(COOKIE_NAMES[kind], `${id}.${sign(kind, id, stamp)}`, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: MAX_AGE_SECONDS,
-  });
+  (await cookies()).set(COOKIE_NAMES[kind], `${id}.${sign(kind, id, stamp)}`, sessionCookieOptions());
 }
 
 async function clearSession(kind: Kind) {

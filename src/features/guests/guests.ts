@@ -1,4 +1,4 @@
-import { isValidColorId } from "@/config/colors";
+import { isValidColor } from "@/config/colors";
 import { GUESTS } from "@/config/guests";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
@@ -27,15 +27,6 @@ export function findOwnerBySlug(slug: string) {
   return prisma.owner.findUnique({ where: { slug } });
 }
 
-/** ほかの相手がもう使っている色 */
-export async function takenColorIds(ownerId: string, exceptGuestId?: string): Promise<string[]> {
-  const guests = await prisma.guest.findMany({
-    where: { ownerId, NOT: exceptGuestId ? { id: exceptGuestId } : undefined },
-    select: { colorId: true },
-  });
-  return guests.map((g) => g.colorId);
-}
-
 /** 共有リンクから相手が自分でアカウントを作る */
 export async function registerGuest(ownerId: string, input: RegisterInput) {
   const name = checkText(input.name, "お名前");
@@ -44,13 +35,10 @@ export async function registerGuest(ownerId: string, input: RegisterInput) {
   if (input.password.length < GUESTS.passwordMinLength) {
     throw new GuestError(`パスワードは${GUESTS.passwordMinLength}文字以上にしてください。`);
   }
-  if (!isValidColorId(input.colorId)) throw new GuestError("色を選んでください。");
+  if (!isValidColor(input.colorId)) throw new GuestError("色を選んでください。");
 
   const exists = await prisma.guest.findUnique({ where: { ownerId_email: { ownerId, email } } });
   if (exists) throw new GuestError("このメールアドレスは登録済みです。ログインしてください。");
-  if ((await takenColorIds(ownerId)).includes(input.colorId)) {
-    throw new GuestError("その色は他の方が使っています。別の色を選んでください。");
-  }
 
   try {
     return await prisma.guest.create({
@@ -64,9 +52,9 @@ export async function registerGuest(ownerId: string, input: RegisterInput) {
       },
     });
   } catch (e) {
-    // 確認と登録のあいだに、同じ色かメールアドレスが先に登録された
+    // 確認と登録のあいだに、同じメールアドレスが先に登録された
     if (isUniqueViolation(e)) {
-      throw new GuestError("その色かメールアドレスは使われています。もう一度お試しください。");
+      throw new GuestError("このメールアドレスは登録済みです。ログインしてください。");
     }
     throw e;
   }
@@ -118,15 +106,10 @@ export async function authenticateGuest(ownerId: string, email: string, password
   throw new GuestError("メールアドレスかパスワードが違います。");
 }
 
-/** 相手が自分の色を変える。ほかの相手が使っている色は選べない */
+/** 相手が自分の色を変える。他の相手と同じ色でもよい */
 export async function changeGuestColor(guestId: string, colorId: string) {
-  if (!isValidColorId(colorId)) throw new GuestError("色を選んでください。");
-  try {
-    await prisma.guest.update({ where: { id: guestId }, data: { colorId } });
-  } catch (e) {
-    if (isUniqueViolation(e)) throw new GuestError("その色は他の方が使っています。別の色を選んでください。");
-    throw e;
-  }
+  if (!isValidColor(colorId)) throw new GuestError("色を選んでください。");
+  await prisma.guest.update({ where: { id: guestId }, data: { colorId } });
 }
 
 export function listGuests(ownerId: string) {

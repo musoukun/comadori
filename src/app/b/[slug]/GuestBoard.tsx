@@ -27,12 +27,10 @@ export function GuestBoard({
   slug,
   todayKey,
   me,
-  takenColors,
 }: {
   slug: string;
   todayKey: string;
   me: Me;
-  takenColors: string[];
 }) {
   const [fromKey, setFromKey] = useState(todayKey);
   const { data, error, reload } = useWeek<WeekResponse>(
@@ -126,7 +124,7 @@ export function GuestBoard({
 
   return (
     <div className="space-y-4 pb-72">
-      <MeBar slug={slug} me={me} takenColors={takenColors} />
+      <MeBar slug={slug} me={me} />
       <WeekNav
         fromKey={fromKey}
         minKey={todayKey}
@@ -175,13 +173,17 @@ export function GuestBoard({
 }
 
 /** ログイン中の名前と色。色の変更とログアウト */
-function MeBar({ slug, me, takenColors }: { slug: string; me: Me; takenColors: string[] }) {
+function MeBar({ slug, me }: { slug: string; me: Me }) {
   const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(findColor(me.colorId).hex);
   const [message, setMessage] = useState<string | null>(null);
-  const color = findColor(me.colorId);
+  const [saving, setSaving] = useState(false);
+  const color = findColor(editing ? draft : me.colorId);
 
-  const change = async (colorId: string) => {
-    const result = await changeColorAction(slug, colorId);
+  const save = async () => {
+    setSaving(true);
+    const result = await changeColorAction(slug, draft);
+    setSaving(false);
     if (result.ok) setEditing(false);
     else setMessage(result.message);
   };
@@ -200,7 +202,14 @@ function MeBar({ slug, me, takenColors }: { slug: string; me: Me; takenColors: s
           </button>
         </form>
       </div>
-      {editing && <ColorPicker value={me.colorId} taken={takenColors} onChange={change} />}
+      {editing && (
+        <div className="flex flex-wrap items-center gap-3">
+          <ColorPicker value={draft} onChange={setDraft} />
+          <button type="button" className="btn btn-sm btn-yellow" onClick={save} disabled={saving}>
+            この色にする
+          </button>
+        </div>
+      )}
       {message && <p className="font-bold text-[#c0392b]">{message}</p>}
     </div>
   );

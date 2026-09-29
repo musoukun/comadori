@@ -66,7 +66,6 @@ function GuestItem({ guest }: { guest: GuestRow }) {
       <span
         className="inline-block h-6 w-6 shrink-0 rounded-full border-2 border-ink"
         style={{ backgroundColor: color.hex }}
-        title={color.name}
       />
       <div className="min-w-32">
         <p className="font-black">{guest.name}</p>

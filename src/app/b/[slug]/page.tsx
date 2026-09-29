@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
+import { randomPresetColor } from "@/config/colors";
 import { SCHEDULING } from "@/config/scheduling";
-import { findOwnerBySlug, takenColorIds } from "@/features/guests/guests";
+import { findOwnerBySlug } from "@/features/guests/guests";
 import { getCurrentGuest } from "@/lib/session";
 import { localDateKey } from "@/lib/time";
 import { AuthPanel } from "./AuthPanel";
@@ -13,7 +14,6 @@ export default async function GuestPage({ params }: PageProps<"/b/[slug]">) {
 
   const current = await getCurrentGuest();
   const guest = current?.ownerId === owner.id ? current : null;
-  const takenColors = await takenColorIds(owner.id, guest?.id);
 
   return (
     <main className="mx-auto max-w-5xl space-y-5 px-4 py-8">
@@ -34,10 +34,9 @@ export default async function GuestPage({ params }: PageProps<"/b/[slug]">) {
           slug={slug}
           todayKey={localDateKey(new Date())}
           me={{ name: guest.name, colorId: guest.colorId, canNameEvent: guest.useGuestTitle }}
-          takenColors={takenColors}
         />
       ) : (
-        <AuthPanel slug={slug} takenColors={takenColors} />
+        <AuthPanel slug={slug} initialColor={randomPresetColor()} />
       )}
     </main>
   );
