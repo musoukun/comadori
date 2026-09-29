@@ -42,7 +42,8 @@ npm run dev
 | `SESSION_SECRET` | ランダムな長い文字列 |
 | `OWNER_EMAIL` | ログインを許可する自分のGoogleアカウントのメールアドレス |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud Console で作る OAuth クライアント（ウェブアプリ） |
-| `RESEND_API_KEY` / `MAIL_FROM` | Resend のAPIキーと送信元 |
+| `SMTP_USER` / `SMTP_PASS` | メールを Gmail から送るときの Gmail アドレスと「アプリ パスワード」（2段階認証が必要） |
+| `RESEND_API_KEY` / `MAIL_FROM` | メールを Resend から送るときのAPIキーと送信元（独自ドメインの認証が必要） |
 
 Google Cloud Console での設定：
 
