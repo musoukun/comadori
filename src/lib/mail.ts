@@ -16,12 +16,14 @@ export async function sendMail(mail: Mail) {
 }
 
 async function sendBySmtp(mail: Mail) {
-  const user = process.env.SMTP_USER!;
+  const user = process.env.SMTP_USER!.trim();
+  // アプリ パスワードは「abcd efgh ijkl mnop」と空白入りで表示されるので、空白は取り除く
+  const pass = process.env.SMTP_PASS!.replace(/\s+/g, "");
   const transport = nodemailer.createTransport({
     host: process.env.SMTP_HOST || "smtp.gmail.com",
     port: Number(process.env.SMTP_PORT || 465),
     secure: Number(process.env.SMTP_PORT || 465) === 465,
-    auth: { user, pass: process.env.SMTP_PASS! },
+    auth: { user, pass },
   });
   try {
     // Gmail はログインしたアドレス以外を送信元にできないので、送信元は SMTP_USER にする
