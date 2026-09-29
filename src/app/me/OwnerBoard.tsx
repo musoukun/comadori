@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Legend, WeekGrid, WeekNav, type CellView, type RangeSelection } from "@/components/WeekGrid";
 import { useWeek } from "@/components/useWeek";
 import { findColor } from "@/config/colors";
@@ -11,6 +11,25 @@ import { DayEndSetting } from "./DayEndSetting";
 
 // 所有者の画面は、新しい予約が見えれば十分なので取り直しの間隔を長めにする
 const OWNER_POLL_SECONDS = 30;
+const SHOW_DETAILS_KEY = "comadori-show-calendar-details";
+
+/** 自分のカレンダーの予定名を出すか。画面共有で見えないよう初期はオフ。このブラウザに覚えさせる */
+function useShowDetails() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShow(localStorage.getItem(SHOW_DETAILS_KEY) === "1");
+    } catch {}
+  }, []);
+  const update = (value: boolean) => {
+    setShow(value);
+    try {
+      localStorage.setItem(SHOW_DETAILS_KEY, value ? "1" : "0");
+    } catch {}
+  };
+  return [show, update] as const;
+}
 
 const LEGEND = [
   { label: "空き", className: "bg-card" },
@@ -28,6 +47,7 @@ export function OwnerBoard({ todayKey, dayEndMinutes }: { todayKey: string; dayE
     OWNER_POLL_SECONDS,
   );
   const [saving, setSaving] = useState(false);
+  const [showDetails, setShowDetails] = useShowDetails();
 
   const mutate = async (fn: () => Promise<void>) => {
     setSaving(true);
@@ -42,7 +62,9 @@ export function OwnerBoard({ todayKey, dayEndMinutes }: { todayKey: string; dayE
   const renderCell = (cell: OwnerCell): CellView => {
     switch (cell.state) {
       case "calendar":
-        return { className: "bg-slate", label: "予定" };
+        return showDetails && cell.calendarTitle
+          ? { className: "bg-slate", label: cell.calendarTitle, title: cell.calendarTitle }
+          : { className: "bg-slate", label: "予定" };
       case "booked":
       case "held": {
         const color = findColor(cell.colorId ?? "");
@@ -86,7 +108,18 @@ export function OwnerBoard({ todayKey, dayEndMinutes }: { todayKey: string; dayE
     <div className="space-y-4">
       <DayEndSetting initialMinutes={dayEndMinutes} onSaved={reload} />
       <WeekNav fromKey={fromKey} onChange={setFromKey} />
-      <Legend items={LEGEND} />
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Legend items={LEGEND} />
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-bold">
+          <input
+            type="checkbox"
+            checked={showDetails}
+            onChange={(e) => setShowDetails(e.target.checked)}
+            className="h-5 w-5 cursor-pointer accent-[var(--ink)]"
+          />
+          予定の中身を表示（相手には「予定あり」としか見えません）
+        </label>
+      </div>
       <p className="text-sm text-muted">
         空いているコマをクリック（{SCHEDULING.defaultBlockMinutes}分）またはドラッグするとブロック、ブロックをクリックすると解除します。予約にマウスを乗せると相手の名前が出ます。
       </p>

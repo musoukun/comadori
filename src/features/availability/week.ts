@@ -56,7 +56,8 @@ export async function buildOwnerWeek(
     }
     const block = blocks.find((b) => overlaps(cell, { start: b.startAt, end: b.endAt }));
     if (block) return { state: "block", blockId: block.id };
-    if (busy.some((b) => overlaps(cell, b))) return { state: "calendar" };
+    const event = busy.find((b) => overlaps(cell, b));
+    if (event) return { state: "calendar", calendarTitle: event.title };
     return { state: isInsideWindow(cell, now, dayEnd) ? "free" : "closed" };
   };
 

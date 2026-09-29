@@ -68,13 +68,17 @@ model Guest {
   @@unique([ownerId, colorId])
 }
 
-// 所有者が .ics から取り込んだ「埋まっている時間帯」。予定の中身は持たない
+// 所有者のカレンダーから取り込んだ「埋まっている時間帯」と予定名
 model ImportedBusy {
   id      String   @id @default(cuid())
   ownerId String
   owner   Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   startAt DateTime
   endAt   DateTime
+  /**
+   * 予定名。所有者の画面にだけ表示し、相手には見せない
+   */
+  title   String?
 
   @@index([ownerId, startAt])
 }

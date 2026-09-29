@@ -36,10 +36,10 @@ export function ImportPanel() {
         until,
       );
       const result = await importBusyAction(
-        busy.map((b) => ({ start: b.start.toISOString(), end: b.end.toISOString() })),
+        busy.map((b) => ({ start: b.start.toISOString(), end: b.end.toISOString(), title: b.title })),
         until.toISOString(),
       );
-      setMessage(result.ok ? `${result.count}件の埋まっている時間を取り込みました。` : result.message);
+      setMessage(result.ok ? `${result.count}件の予定を取り込みました。` : result.message);
       if (result.ok) setCalendars([]);
     } catch {
       setMessage("取り込みに失敗しました。ファイルを確かめてください。");

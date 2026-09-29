@@ -17,6 +17,8 @@ export type OwnerCell = {
   /** このコマから指定の長さ分が空いていて、予約を始められる */
   bookable: boolean;
   blockId?: string;
+  /** 自分のカレンダーの予定名（calendar のとき）。所有者の画面にだけ出す */
+  calendarTitle?: string;
   /** 予約（仮押さえ含む）のとき、カレンダーに出す予定名・相手・相手の色 */
   bookingId?: string;
   title?: string;

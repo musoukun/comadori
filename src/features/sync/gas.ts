@@ -124,12 +124,12 @@ function syncBookings(calendar) {
   Object.keys(existing).forEach(function (id) { existing[id].deleteEvent(); });
 }
 
-/** 埋まっている時間帯だけを送る。予定名や中身は送らない */
+/** 埋まっている時間帯と予定名を送る。予定名はコマドリの自分の画面にだけ表示され、相手には見せない */
 function sendBusy(calendar) {
   const now = new Date();
   const until = new Date(now.getTime() + SYNC_DAYS * 86400000);
   const busy = calendar.getEvents(now, until).filter(isBusy).map(function (event) {
-    return { start: event.getStartTime().toISOString(), end: event.getEndTime().toISOString() };
+    return { start: event.getStartTime().toISOString(), end: event.getEndTime().toISOString(), title: event.getTitle() };
   });
   callComadori("post", "/api/gas/busy", { busy: busy, until: until.toISOString() });
 }
