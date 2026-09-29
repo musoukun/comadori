@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ColorPicker } from "@/components/ColorPicker";
-import { Legend, WeekGrid, WeekNav, type CellView, type RangeSelection } from "@/components/WeekGrid";
+import { Legend, RowHeightSlider, WeekGrid, WeekNav, type CellView, type RangeSelection } from "@/components/WeekGrid";
+import { useRowHeight } from "@/components/useRowHeight";
 import { useWeek } from "@/components/useWeek";
 import { findColor } from "@/config/colors";
 import { GUESTS } from "@/config/guests";
@@ -41,6 +42,7 @@ export function GuestBoard({
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ start: string; end: string } | null>(null);
+  const [rowHeight, setRowHeight] = useRowHeight();
   const color = findColor(me.colorId);
   const hold = data?.myHold ?? null;
 
@@ -131,19 +133,22 @@ export function GuestBoard({
         maxKey={addDays(todayKey, SCHEDULING.daysAhead)}
         onChange={setFromKey}
       />
-      <Legend
-        items={[
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Legend
+          items={[
           { label: "空き", className: "bg-card" },
           { label: "自分の予約", className: "", style: { backgroundColor: color.hex } },
           { label: "予定あり", className: "bg-slate" },
           { label: "他の方が手続き中", className: "bg-yellow/50 hatch" },
           { label: "受付時間外", className: "bg-[var(--closed)] hatch" },
-        ]}
-      />
+          ]}
+        />
+        <RowHeightSlider value={rowHeight} onChange={setRowHeight} />
+      </div>
       {message && <p className="panel bg-yellow px-4 py-2 font-bold">{message}</p>}
       {error && <p className="panel bg-pink px-4 py-2 font-bold">{error}</p>}
       {data ? (
-        <WeekGrid days={data.days} renderCell={renderCell} selection={selection} />
+        <WeekGrid days={data.days} renderCell={renderCell} selection={selection} rowHeight={rowHeight} />
       ) : (
         <p className="font-bold">読み込み中…</p>
       )}

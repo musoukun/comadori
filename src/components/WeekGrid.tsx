@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import type { Day } from "@/features/availability/types";
 import { addDays, formatDayLabel, formatTime, parseDateKey } from "@/lib/time";
+import { ROW_HEIGHT } from "./useRowHeight";
 
 export type CellView = {
   className: string;
@@ -32,6 +33,8 @@ type Props<C extends Cell> = {
   days: Day<C>[];
   renderCell: (cell: C) => CellView;
   selection?: RangeSelection<C>;
+  /** 1マスの高さ（px） */
+  rowHeight?: number;
 };
 
 type Drag = { day: number; anchor: number; current: number };
@@ -57,7 +60,9 @@ function rangeLabel(first: Cell, last: Cell): string {
 }
 
 /** 縦に時刻、横に日付を並べたコマ割りのカレンダー */
-export function WeekGrid<C extends Cell>({ days, renderCell, selection }: Props<C>) {
+export function WeekGrid<C extends Cell>({ days, renderCell, selection, rowHeight = ROW_HEIGHT.max }: Props<C>) {
+  // マスを縮めたときは、マスの中の文字も小さくする
+  const labelSize = rowHeight < 18 ? "text-[9px] leading-none" : "text-[11px] leading-tight";
   const times = days[0]?.cells.map((c) => formatTime(new Date(c.start))) ?? [];
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -167,11 +172,11 @@ export function WeekGrid<C extends Cell>({ days, renderCell, selection }: Props<
                     }
                   }}
                   title={view.title}
-                  style={view.style}
-                  className={`relative h-6 border-l-2 border-ink text-left disabled:cursor-default ${lineClass} ${view.className}`}
+                  style={{ ...view.style, height: rowHeight }}
+                  className={`relative border-l-2 border-ink text-left disabled:cursor-default ${lineClass} ${view.className}`}
                 >
                   {showLabel && (
-                    <span className="absolute top-0.5 left-1 right-1 z-10 truncate text-[11px] leading-tight font-bold">
+                    <span className={`absolute top-0.5 left-1 right-1 z-10 truncate font-bold ${labelSize}`}>
                       {view.label}
                     </span>
                   )}
@@ -249,5 +254,25 @@ export function Legend({
         </span>
       ))}
     </div>
+  );
+}
+
+/** マスの高さを、今までの高さから半分まで縮めるスライダー */
+export function RowHeightSlider({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const percent = Math.round((value / ROW_HEIGHT.max) * 100);
+  return (
+    <label className="flex items-center gap-2 text-sm font-bold">
+      マスの高さ
+      <input
+        type="range"
+        min={ROW_HEIGHT.min}
+        max={ROW_HEIGHT.max}
+        step={1}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-32 cursor-pointer accent-[var(--ink)]"
+      />
+      <span className="w-10 text-right tabular-nums">{percent}%</span>
+    </label>
   );
 }

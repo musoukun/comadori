@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Legend, WeekGrid, WeekNav, type CellView, type RangeSelection } from "@/components/WeekGrid";
+import { Legend, RowHeightSlider, WeekGrid, WeekNav, type CellView, type RangeSelection } from "@/components/WeekGrid";
+import { useRowHeight } from "@/components/useRowHeight";
 import { useWeek } from "@/components/useWeek";
 import { findColor } from "@/config/colors";
 import { SCHEDULING } from "@/config/scheduling";
@@ -48,6 +49,7 @@ export function OwnerBoard({ todayKey, dayEndMinutes }: { todayKey: string; dayE
   );
   const [saving, setSaving] = useState(false);
   const [showDetails, setShowDetails] = useShowDetails();
+  const [rowHeight, setRowHeight] = useRowHeight();
 
   const mutate = async (fn: () => Promise<void>) => {
     setSaving(true);
@@ -119,13 +121,14 @@ export function OwnerBoard({ todayKey, dayEndMinutes }: { todayKey: string; dayE
           />
           予定の中身を表示（相手には「予定あり」としか見えません）
         </label>
+        <RowHeightSlider value={rowHeight} onChange={setRowHeight} />
       </div>
       <p className="text-sm text-muted">
         空いているコマをクリック（{SCHEDULING.defaultBlockMinutes}分）またはドラッグするとブロック、ブロックをクリックすると解除します。予約にマウスを乗せると相手の名前が出ます。
       </p>
       {error && <p className="panel bg-pink px-4 py-2 font-bold">{error}</p>}
       {data ? (
-        <WeekGrid days={data.days} renderCell={renderCell} selection={selection} />
+        <WeekGrid days={data.days} renderCell={renderCell} selection={selection} rowHeight={rowHeight} />
       ) : (
         <p className="font-bold">読み込み中…</p>
       )}
